@@ -194,31 +194,41 @@ func crushAll(concurrency int, inputs *[]string, output *string) error {
 
 	images, errs := findImages(done, inputs, output)
 
-	c := make(chan Image)
+	imagesChannel := make(chan Image)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			crush(done, images, c)
+			crush(done, images, imagesChannel)
 			wg.Done()
 		}()
 	}
 
 	go func() {
 		wg.Wait()
-		close(c)
+		close(imagesChannel)
 	}()
 
-	for image := range c {
+	var beforeTotal, afterTotal int64
+	timeStart := time.Now()
+	for image := range imagesChannel {
 		if image.Err != nil {
 			fmt.Fprintf(os.Stderr, "file: %s error:\n", image.BeforePathRel)
 			fmt.Fprint(os.Stderr, image.ErrMsg)
 			continue
 		}
+		beforeTotal += image.BeforeSize
+		afterTotal += image.AfterSize
 		fmt.Printf("file: %s before: %d after: %d reduced: %.2f%%\n",
 			image.BeforePathRel, image.BeforeSize, image.AfterSize,
 			float64(image.BeforeSize-image.AfterSize)/float64(image.BeforeSize)*100)
+	}
+	if beforeTotal > 0 && afterTotal > 0 {
+		fmt.Printf("total: before: %d after: %d reduced: %d (%.2f%%) time used: %.3f secs\n",
+			beforeTotal, afterTotal, beforeTotal-afterTotal,
+			float64(beforeTotal-afterTotal)/float64(beforeTotal)*100,
+			time.Since(timeStart).Seconds())
 	}
 
 	if err := <-errs; err != nil {
@@ -264,8 +274,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
-	timeStart := time.Now()
-
 	if concurrency > 8 || concurrency < 1 {
 		concurrency = 2
 	}
@@ -274,6 +282,4 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
-
-	fmt.Printf("time used %.3f secs\n", time.Since(timeStart).Seconds())
 }
