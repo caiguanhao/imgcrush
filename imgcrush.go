@@ -29,6 +29,14 @@ type Image struct {
 	AfterSize     int64
 	Err           error
 	ErrMsg        string
+	TimeUsed      float64
+}
+
+func (image *Image) from(from Image) {
+	image.BeforePathRel = from.BeforePathRel
+	image.BeforeSize = from.BeforeSize
+	image.AfterSize = from.AfterSize
+	image.TimeUsed = from.TimeUsed
 }
 
 func (image Image) command() *exec.Cmd {
@@ -56,6 +64,10 @@ func (image Image) mkdir() error {
 func (image *Image) crush() {
 	var err error
 	var bytes []byte
+	timeStart := time.Now()
+	defer func() {
+		image.TimeUsed = time.Since(timeStart).Seconds()
+	}()
 	cmd := image.command()
 	stderr, err := cmd.StderrPipe()
 
@@ -211,6 +223,7 @@ func crushAll(concurrency int, inputs *[]string, output *string) error {
 	}()
 
 	var beforeTotal, afterTotal int64
+	var maxTimeImage Image
 	timeStart := time.Now()
 	for image := range imagesChannel {
 		if image.Err != nil {
@@ -220,11 +233,20 @@ func crushAll(concurrency int, inputs *[]string, output *string) error {
 		}
 		beforeTotal += image.BeforeSize
 		afterTotal += image.AfterSize
-		fmt.Printf("file: %s before: %d after: %d reduced: %.2f%%\n",
+		fmt.Printf("file: %s before: %d after: %d reduced: %.2f%% time used: %.3f secs\n",
 			image.BeforePathRel, image.BeforeSize, image.AfterSize,
-			float64(image.BeforeSize-image.AfterSize)/float64(image.BeforeSize)*100)
+			float64(image.BeforeSize-image.AfterSize)/float64(image.BeforeSize)*100,
+			image.TimeUsed)
+		if image.TimeUsed > maxTimeImage.TimeUsed {
+			maxTimeImage.from(image)
+		}
 	}
 	if beforeTotal > 0 && afterTotal > 0 {
+		fmt.Println("-----")
+		fmt.Printf("total: %s (before: %d after: %d reduced: %.2f%%) took the longest time (%.3f secs) to complete\n",
+			maxTimeImage.BeforePathRel, maxTimeImage.BeforeSize, maxTimeImage.AfterSize,
+			float64(maxTimeImage.BeforeSize-maxTimeImage.AfterSize)/float64(maxTimeImage.BeforeSize)*100,
+			maxTimeImage.TimeUsed)
 		fmt.Printf("total: before: %d after: %d reduced: %d (%.2f%%) time used: %.3f secs\n",
 			beforeTotal, afterTotal, beforeTotal-afterTotal,
 			float64(beforeTotal-afterTotal)/float64(beforeTotal)*100,
