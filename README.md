@@ -3,7 +3,7 @@ imgcrush
 
 Recursively, losslessly and quickly compress JPG, PNG, GIF files.
 
-Uses:
+Requirements:
 
 * [mozjpeg](https://github.com/mozilla/mozjpeg)
 * [pngcrush](http://pmt.sourceforge.net/pngcrush/)
@@ -22,7 +22,15 @@ If no input directory provided, it will use current directory.
 Images in output directory will not be used as input images.
 ```
 
-If you want to run `imgcrush` in a Docker container:
+Install:
+
+If you have installed `go` already, run:
+
+```
+go get -u -v github.com/caiguanhao/imgcrush
+```
+
+Or run `imgcrush` in a Docker container:
 
 ```
 # build the image first:
