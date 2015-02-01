@@ -22,6 +22,16 @@ If no input directory provided, it will use current directory.
 Images in output directory will not be used as input images.
 ```
 
+If you want to run `imgcrush` in a Docker container:
+
+```
+# build the image first:
+docker build -t imgcrush .
+
+# run imgcrush in your current directory
+docker run --rm -v="$(pwd):/imgcrush" imgcrush -c 4 .
+```
+
 References:
 
 * [Comparison of JPEG Lossless Compression Tools](
