@@ -268,7 +268,7 @@ func main() {
 	flag.IntVar(&concurrency, "c", 2, "")
 	flag.StringVar(&output, "o", "done", "")
 	flag.Usage = func() {
-		fmt.Println("Recursively, losslessly and quickly compress JPG, PNG, GIF files.")
+		fmt.Println("Recursively, losslessly and quickly compress JPG, PNG, GIF images.")
 		fmt.Println()
 		fmt.Printf("Usage: %s [-c 2] [-o done] [DIRECTORY] ...\n", path.Base(os.Args[0]))
 		fmt.Println("  -c <num>  concurrency from 1 to 8, defaults to 2")

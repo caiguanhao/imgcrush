@@ -1,7 +1,7 @@
 imgcrush
 ========
 
-Recursively, losslessly and quickly compress JPG, PNG, GIF files.
+Recursively, losslessly and quickly compress JPG, PNG, GIF images.
 
 Requirements:
 
@@ -12,7 +12,7 @@ Requirements:
 Usage:
 
 ```
-Recursively, losslessly and quickly compress JPG, PNG, GIF files.
+Recursively, losslessly and quickly compress JPG, PNG, GIF images.
 
 Usage: imgcrush [-c 2] [-o done] [DIRECTORY] ...
   -c <num>  concurrency from 1 to 8, defaults to 2
