@@ -15,8 +15,9 @@ Usage:
 Recursively, losslessly and quickly compress JPG, PNG, GIF images.
 
 Usage: imgcrush [-c 2] [-o done] [DIRECTORY] ...
-  -c <num>  concurrency from 1 to 8, defaults to 2
-  -o <dir>  output directory, defaults to done
+  -c <num>     concurrency from 1 to 8, defaults to 2
+  -o <dir>     output directory, defaults to done
+  --old-style  print results using old style
 
 If no input directory provided, it will use current directory.
 Images in output directory will not be used as input images.

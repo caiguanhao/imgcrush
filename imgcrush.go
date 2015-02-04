@@ -11,13 +11,26 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+	"unsafe"
 )
 
 const (
 	TYPE_JPG = 0
 	TYPE_PNG = 1
 	TYPE_GIF = 2
+
+	FILE_PADDING  = 1
+	SIZE_WIDTH    = 10
+	PERCENT_WIDTH = 9
+	SECONDS_WIDTH = 10
+)
+
+var (
+	OLD_STYLE_PRINT bool
+	TERM_WIDTH      int
+	FILE_WIDTH      int
 )
 
 type Image struct {
@@ -102,6 +115,78 @@ func (image *Image) calculateAfterSize() {
 		return
 	}
 	image.AfterSize = stat.Size()
+}
+
+func (image Image) print() {
+	reduced := float64(image.BeforeSize-image.AfterSize) / float64(image.BeforeSize) * 100
+
+	if OLD_STYLE_PRINT {
+		fmt.Printf("file: %s before: %d after: %d reduced: %.2f%% time used: %.3f secs\n",
+			image.BeforePathRel, image.BeforeSize, image.AfterSize, reduced, image.TimeUsed)
+		return
+	}
+
+	fileR := []rune(image.BeforePathRel)
+	var file string
+	if len(fileR) > FILE_WIDTH {
+		file = string(fileR[0:FILE_WIDTH])
+	} else {
+		file = string(fileR)
+	}
+
+	fmt.Printf("%-*s", FILE_WIDTH, file)
+	fmt.Printf("%*s", FILE_PADDING+2, " ")
+	fmt.Printf("%*d", SIZE_WIDTH, image.BeforeSize)
+	fmt.Printf("%*d", SIZE_WIDTH, image.AfterSize)
+	fmt.Printf("%*.2f%%", PERCENT_WIDTH, reduced)
+	fmt.Printf("%*.3fs", SECONDS_WIDTH, image.TimeUsed)
+	fmt.Println()
+}
+
+func printHeader() {
+	if OLD_STYLE_PRINT {
+		return
+	}
+
+	fmt.Printf("%-*s", FILE_WIDTH, "FILE")
+	fmt.Printf("%*s", FILE_PADDING+2, " ")
+	fmt.Printf("%*s", SIZE_WIDTH, "BEFORE")
+	fmt.Printf("%*s", SIZE_WIDTH, "AFTER")
+	fmt.Printf("%*s", PERCENT_WIDTH+1, "REDUCED")
+	fmt.Printf("%*s", SECONDS_WIDTH+1, "TIME")
+	fmt.Println()
+}
+
+func printTotal(maxTimeImage Image, timeStart time.Time, beforeTotal, afterTotal int64) {
+	maxTimeImageReduced := float64(maxTimeImage.BeforeSize-maxTimeImage.AfterSize) / float64(maxTimeImage.BeforeSize) * 100
+	reduced := float64(beforeTotal-afterTotal) / float64(beforeTotal) * 100
+
+	if OLD_STYLE_PRINT {
+		fmt.Println("-----")
+		fmt.Printf("total: %s (before: %d after: %d reduced: %.2f%%) took the longest time (%.3f secs) to complete\n",
+			maxTimeImage.BeforePathRel, maxTimeImage.BeforeSize, maxTimeImage.AfterSize,
+			maxTimeImageReduced, maxTimeImage.TimeUsed)
+		fmt.Printf("total: before: %d after: %d reduced: %d (%.2f%%) time used: %.3f secs\n",
+			beforeTotal, afterTotal, beforeTotal-afterTotal,
+			reduced, time.Since(timeStart).Seconds())
+		return
+	}
+
+	fmt.Printf("%-*s", FILE_WIDTH, fmt.Sprintf("(longest time) %s", maxTimeImage.BeforePathRel))
+	fmt.Printf("%*s", FILE_PADDING+2, " ")
+	fmt.Printf("%*d", SIZE_WIDTH, maxTimeImage.BeforeSize)
+	fmt.Printf("%*d", SIZE_WIDTH, maxTimeImage.AfterSize)
+	fmt.Printf("%*.2f%%", PERCENT_WIDTH, maxTimeImageReduced)
+	fmt.Printf("%*.3fs", SECONDS_WIDTH, maxTimeImage.TimeUsed)
+	fmt.Println()
+
+	fmt.Printf("%-*s", FILE_WIDTH, "(total)")
+	fmt.Printf("%*s", FILE_PADDING+2, " ")
+	fmt.Printf("%*d", SIZE_WIDTH, beforeTotal)
+	fmt.Printf("%*d", SIZE_WIDTH, afterTotal)
+	fmt.Printf("%*.2f%%", PERCENT_WIDTH, reduced)
+	fmt.Printf("%*.3fs", SECONDS_WIDTH, time.Since(timeStart).Seconds())
+	fmt.Println()
 }
 
 func imageTypeByName(name string) int64 {
@@ -222,6 +307,8 @@ func crushAll(concurrency int, inputs *[]string, output *string) error {
 		close(imagesChannel)
 	}()
 
+	printHeader()
+
 	var beforeTotal, afterTotal int64
 	var maxTimeImage Image
 	timeStart := time.Now()
@@ -233,24 +320,13 @@ func crushAll(concurrency int, inputs *[]string, output *string) error {
 		}
 		beforeTotal += image.BeforeSize
 		afterTotal += image.AfterSize
-		fmt.Printf("file: %s before: %d after: %d reduced: %.2f%% time used: %.3f secs\n",
-			image.BeforePathRel, image.BeforeSize, image.AfterSize,
-			float64(image.BeforeSize-image.AfterSize)/float64(image.BeforeSize)*100,
-			image.TimeUsed)
+		image.print()
 		if image.TimeUsed > maxTimeImage.TimeUsed {
 			maxTimeImage.from(image)
 		}
 	}
 	if beforeTotal > 0 && afterTotal > 0 {
-		fmt.Println("-----")
-		fmt.Printf("total: %s (before: %d after: %d reduced: %.2f%%) took the longest time (%.3f secs) to complete\n",
-			maxTimeImage.BeforePathRel, maxTimeImage.BeforeSize, maxTimeImage.AfterSize,
-			float64(maxTimeImage.BeforeSize-maxTimeImage.AfterSize)/float64(maxTimeImage.BeforeSize)*100,
-			maxTimeImage.TimeUsed)
-		fmt.Printf("total: before: %d after: %d reduced: %d (%.2f%%) time used: %.3f secs\n",
-			beforeTotal, afterTotal, beforeTotal-afterTotal,
-			float64(beforeTotal-afterTotal)/float64(beforeTotal)*100,
-			time.Since(timeStart).Seconds())
+		printTotal(maxTimeImage, timeStart, beforeTotal, afterTotal)
 	}
 
 	if err := <-errs; err != nil {
@@ -267,12 +343,14 @@ func main() {
 
 	flag.IntVar(&concurrency, "c", 2, "")
 	flag.StringVar(&output, "o", "done", "")
+	flag.BoolVar(&OLD_STYLE_PRINT, "old-style", false, "")
 	flag.Usage = func() {
 		fmt.Println("Recursively, losslessly and quickly compress JPG, PNG, GIF images.")
 		fmt.Println()
 		fmt.Printf("Usage: %s [-c 2] [-o done] [DIRECTORY] ...\n", path.Base(os.Args[0]))
-		fmt.Println("  -c <num>  concurrency from 1 to 8, defaults to 2")
-		fmt.Println("  -o <dir>  output directory, defaults to done")
+		fmt.Println("  -c <num>     concurrency from 1 to 8, defaults to 2")
+		fmt.Println("  -o <dir>     output directory, defaults to done")
+		fmt.Println("  --old-style  print results using old style")
 		fmt.Println()
 		fmt.Println("If no input directory provided, it will use current directory.")
 		fmt.Println("Images in output directory will not be used as input images.")
@@ -296,6 +374,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
+	TERM_WIDTH, _, err = getTerminalSize()
+	FILE_WIDTH = TERM_WIDTH - (SIZE_WIDTH+1)*2 - (PERCENT_WIDTH + 1) - (SECONDS_WIDTH + 1) - FILE_PADDING
+
 	if concurrency > 8 || concurrency < 1 {
 		concurrency = 2
 	}
@@ -304,4 +385,14 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
+}
+
+func getTerminalSize() (width, height int, err error) {
+	var dimensions [4]uint16
+	if _, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(syscall.Stdin),
+		uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&dimensions)),
+		0, 0, 0); err != 0 {
+		return -1, -1, err
+	}
+	return int(dimensions[1]), int(dimensions[0]), nil
 }
