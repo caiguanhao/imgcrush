@@ -23,7 +23,7 @@ RUN ln -s /usr/bin/jpegtran /usr/bin/mozjpeg
 VOLUME /imgcrush
 WORKDIR /imgcrush
 ENTRYPOINT ["imgcrush"]
-CMD ["--help"]
+CMD []
 
 ADD . /go/imgcrush
 
