@@ -21,6 +21,7 @@ Usage: imgcrush [-c 2] [-o done] [DIRECTORY] ...
 
 If no input directory provided, it will use current directory.
 Images in output directory will not be used as input images.
+You can set TERM_WIDTH environment variable if there's no tty.
 ```
 
 Install:
@@ -38,7 +39,10 @@ Or run `imgcrush` in a Docker container:
 docker build -t imgcrush .
 
 # run imgcrush in your current directory
-docker run --rm -v="$(pwd):/imgcrush" imgcrush -c 4 .
+docker run --rm -v="$(pwd):/imgcrush" -e "TERM_WIDTH=$(tput cols)" imgcrush -c 4 .
+
+# or you can make an alias for the long Docker command
+# alias imgcrush='docker run --rm -v="$(pwd):/imgcrush" -e "TERM_WIDTH=$(tput cols)" imgcrush'
 ```
 
 References:

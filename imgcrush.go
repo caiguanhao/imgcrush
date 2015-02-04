@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -126,21 +127,24 @@ func (image Image) print() {
 		return
 	}
 
-	fileR := []rune(image.BeforePathRel)
-	var file string
-	if len(fileR) > FILE_WIDTH {
-		file = string(fileR[0:FILE_WIDTH])
-	} else {
-		file = string(fileR)
-	}
-
-	fmt.Printf("%-*s", FILE_WIDTH, file)
+	fmt.Printf("%-*s", FILE_WIDTH, fitFileColumn(image.BeforePathRel))
 	fmt.Printf("%*s", FILE_PADDING+2, " ")
 	fmt.Printf("%*d", SIZE_WIDTH, image.BeforeSize)
 	fmt.Printf("%*d", SIZE_WIDTH, image.AfterSize)
 	fmt.Printf("%*.2f%%", PERCENT_WIDTH, reduced)
 	fmt.Printf("%*.3fs", SECONDS_WIDTH, image.TimeUsed)
 	fmt.Println()
+}
+
+func fitFileColumn(input string) string {
+	inputR := []rune(input)
+	var ret string
+	if len(inputR) > FILE_WIDTH {
+		ret = string(inputR[0:FILE_WIDTH])
+	} else {
+		ret = string(inputR)
+	}
+	return ret
 }
 
 func printHeader() {
@@ -172,7 +176,8 @@ func printTotal(maxTimeImage Image, timeStart time.Time, beforeTotal, afterTotal
 		return
 	}
 
-	fmt.Printf("%-*s", FILE_WIDTH, fmt.Sprintf("(longest time) %s", maxTimeImage.BeforePathRel))
+	maxTimeImagePath := fmt.Sprintf("(longest time) %s", maxTimeImage.BeforePathRel)
+	fmt.Printf("%-*s", FILE_WIDTH, fitFileColumn(maxTimeImagePath))
 	fmt.Printf("%*s", FILE_PADDING+2, " ")
 	fmt.Printf("%*d", SIZE_WIDTH, maxTimeImage.BeforeSize)
 	fmt.Printf("%*d", SIZE_WIDTH, maxTimeImage.AfterSize)
@@ -354,6 +359,7 @@ func main() {
 		fmt.Println()
 		fmt.Println("If no input directory provided, it will use current directory.")
 		fmt.Println("Images in output directory will not be used as input images.")
+		fmt.Println("You can set TERM_WIDTH environment variable if there's no tty.")
 	}
 	flag.Parse()
 
@@ -374,8 +380,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
-	TERM_WIDTH, _, err = getTerminalSize()
+	var TERM_WIDTH_ int64
+	TERM_WIDTH_, err = strconv.ParseInt(os.Getenv("TERM_WIDTH"), 10, 0)
+	if err != nil {
+		TERM_WIDTH = 0
+	} else {
+		TERM_WIDTH = int(TERM_WIDTH_)
+	}
+	if TERM_WIDTH == 0 {
+		TERM_WIDTH, _, err = getTerminalSize()
+	}
 	FILE_WIDTH = TERM_WIDTH - (SIZE_WIDTH+1)*2 - (PERCENT_WIDTH + 1) - (SECONDS_WIDTH + 1) - FILE_PADDING
+	if FILE_WIDTH < 1 {
+		OLD_STYLE_PRINT = true
+	}
 
 	if concurrency > 8 || concurrency < 1 {
 		concurrency = 2
